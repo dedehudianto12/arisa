@@ -84,7 +84,7 @@ contract ArisanContract is ReentrancyGuard, Ownable {
     );
     event MemberJoined(
         uint256 indexed groupId,
-        address indexed membe,
+        address indexed member,
         uint256 joinedAt
     );
     event MemberInvited(
@@ -121,7 +121,7 @@ contract ArisanContract is ReentrancyGuard, Ownable {
 
     modifier onlyGroupMember(uint256 _groupId) {
         require(
-            members[_groupId][msg.sender].wallet != address(0),
+            members[_groupId][msg.sender].memberAddress != address(0),
             "Not a member"
         );
         _;
@@ -137,7 +137,7 @@ contract ArisanContract is ReentrancyGuard, Ownable {
 
     modifier groupActive(uint256 _groupId) {
         require(
-            groups[_groupId].status == GroupStatus.Active,
+            groups[_groupId].status == GroupStatus.ACTIVE,
             "Group not active"
         );
         _;
@@ -145,14 +145,18 @@ contract ArisanContract is ReentrancyGuard, Ownable {
 
     modifier validContribution(uint256 _groupId) {
         require(
-            msg.value == groups[_groupId].contributionAmount,
+            usdcToken.allowance(msg.sender, address(this)) >=
+                groups[_groupId].contributionAmount,
             "Invalid contribution amount"
         );
         _;
     }
 
     modifier withinGracePeriod(uint256 _groupId) {
-        // Check if current time is within grace period for current round
+        require(
+            block.timestamp < groups[_groupId].paymentDeadline + 1 days,
+            "Grace period ended"
+        );
         _;
     }
 
