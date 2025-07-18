@@ -304,6 +304,7 @@ contract ArisanContract is ReentrancyGuard, Ownable {
         Group storage group = groups[_groupId];
         Member storage member = members[_groupId][msg.sender];
 
+        require(group.admin != msg.sender, "Admin cannot leave group");
         require(
             group.memberCount > 1,
             "Cannot leave group with only one member"

@@ -260,13 +260,119 @@ contract ArisanTest is Test {
     }
 
     // Test Invite to Group
-    function test_InviteToGroup_Success() public {}
+    function test_InviteToGroup_Success() public {
+        address admin = makeAddr("admin");
+        uint256 maxMembers = 10;
+        uint256 paymentDeadline = block.timestamp + 7 days;
+        bool isPublic = true;
+        uint256 contributionAmount = 10e6;
+
+        vm.startPrank(admin);
+        arisan.createGroup(
+            maxMembers,
+            paymentDeadline,
+            isPublic,
+            contributionAmount
+        );
+        vm.stopPrank();
+
+        address invitee = makeAddr("invitee");
+        vm.startPrank(admin);
+        vm.expectEmit(true, true, true, true);
+        emit ArisanContract.MemberInvited(1, invitee, admin);
+        arisan.inviteToGroup(1, invitee);
+        vm.stopPrank();
+
+        address[] memory members = arisan.getGroupMembers(1);
+        assertEq(members[1], invitee, "Invitee should be added to group");
+        assertEq(members.length, 2, "Group should have two members");
+
+        ArisanContract.Member memory invitedMember = arisan.getMember(
+            1,
+            invitee
+        );
+        assertEq(
+            invitedMember.memberAddress,
+            invitee,
+            "Invitee address mismatch"
+        );
+    }
 
     function test_InviteToGroup_NotAdmin() public {
-        // Non-admin tries to invite someone
+        address admin = makeAddr("admin");
+        uint256 maxMembers = 10;
+        uint256 paymentDeadline = block.timestamp + 7 days;
+        bool isPublic = true;
+        uint256 contributionAmount = 10e6;
+
+        vm.startPrank(admin);
+        arisan.createGroup(
+            maxMembers,
+            paymentDeadline,
+            isPublic,
+            contributionAmount
+        );
+        vm.stopPrank();
+
+        address nonAdmin = makeAddr("nonAdmin");
+        address invitee = makeAddr("invitee");
+
+        vm.startPrank(nonAdmin);
+        vm.expectRevert("Not group admin");
+        arisan.inviteToGroup(1, invitee);
+        vm.stopPrank();
+
+        address[] memory members = arisan.getGroupMembers(1);
+        assertEq(members.length, 1, "Group should still have one members");
+        assertEq(
+            members[0],
+            admin,
+            "Admin should be the only member of the group"
+        );
     }
 
     function test_InviteToGroup_AlreadyMember() public {
         // Try to invite existing member
+        address admin = makeAddr("admin");
+        uint256 maxMembers = 10;
+        uint256 paymentDeadline = block.timestamp + 7 days;
+        bool isPublic = true;
+        uint256 contributionAmount = 10e6;
+
+        vm.startPrank(admin);
+        arisan.createGroup(
+            maxMembers,
+            paymentDeadline,
+            isPublic,
+            contributionAmount
+        );
+        vm.stopPrank();
+
+        address invitee = makeAddr("invitee");
+        vm.startPrank(admin);
+        arisan.inviteToGroup(1, invitee);
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+        vm.expectRevert("Already a member");
+        arisan.inviteToGroup(1, invitee);
+        vm.stopPrank();
+
+        address[] memory members = arisan.getGroupMembers(1);
+        assertEq(members.length, 2, "Group should still have two members");
+        assertEq(members[1], invitee, "Invitee should still be in group");
+    }
+
+    function test_LeaveGroup_Success() public {
+        // Create group, join, then leave
+        // Check: member removed from arrays, memberCount decreased
+    }
+
+    function test_LeaveGroup_LastMember() public {
+        // Try to leave when you're the only member
+    }
+
+    function test_LeaveGroup_AfterReceivingPayout() public {
+        // Set hasReceived = true, then try to leave
     }
 }
