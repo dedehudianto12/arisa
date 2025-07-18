@@ -363,16 +363,85 @@ contract ArisanTest is Test {
         assertEq(members[1], invitee, "Invitee should still be in group");
     }
 
+    // Test Leaving Group
     function test_LeaveGroup_Success() public {
         // Create group, join, then leave
         // Check: member removed from arrays, memberCount decreased
+        address admin = makeAddr("admin");
+        uint256 maxMembers = 10;
+        uint256 paymentDeadline = block.timestamp + 7 days;
+        bool isPublic = true;
+        uint256 contributionAmount = 10e6;
+
+        vm.startPrank(admin);
+        arisan.createGroup(
+            maxMembers,
+            paymentDeadline,
+            isPublic,
+            contributionAmount
+        );
+        vm.stopPrank();
+
+        address member = makeAddr("member");
+        vm.startPrank(member);
+        arisan.joinGroup(1);
+        vm.stopPrank();
+
+        vm.startPrank(member);
+        vm.expectEmit(true, true, true, true);
+        emit ArisanContract.MemberLeft(1, member);
+        arisan.leaveGroup(1);
+        vm.stopPrank();
+
+        address[] memory members = arisan.getGroupMembers(1);
+        assertEq(members.length, 1, "Group should have one member left");
+        assertEq(members[0], admin, "Admin should be the only member left");
     }
 
     function test_LeaveGroup_LastMember() public {
         // Try to leave when you're the only member
+        address admin = makeAddr("admin");
+        uint256 maxMembers = 10;
+        uint256 paymentDeadline = block.timestamp + 7 days;
+        bool isPublic = true;
+        uint256 contributionAmount = 10e6;
+
+        vm.startPrank(admin);
+        arisan.createGroup(
+            maxMembers,
+            paymentDeadline,
+            isPublic,
+            contributionAmount
+        );
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+        vm.expectRevert("Admin cannot leave group");
+        arisan.leaveGroup(1);
+        vm.stopPrank();
     }
 
-    function test_LeaveGroup_AfterReceivingPayout() public {
-        // Set hasReceived = true, then try to leave
+    function test_LeaveGroup_NotInGroup() public {
+        // Try to leave when you're the only member
+        address admin = makeAddr("admin");
+        uint256 maxMembers = 10;
+        uint256 paymentDeadline = block.timestamp + 7 days;
+        bool isPublic = true;
+        uint256 contributionAmount = 10e6;
+
+        vm.startPrank(admin);
+        arisan.createGroup(
+            maxMembers,
+            paymentDeadline,
+            isPublic,
+            contributionAmount
+        );
+        vm.stopPrank();
+
+        address nonMember = makeAddr("nonMember");
+        vm.startPrank(nonMember);
+        vm.expectRevert("Not a member");
+        arisan.leaveGroup(1);
+        vm.stopPrank();
     }
 }

@@ -63,11 +63,21 @@ contract ArisanContract is ReentrancyGuard, Ownable {
         bool isProcessed;
     }
 
+    struct Contribution {
+        uint256 amount;
+        uint256 paidAt;
+        bool isLate;
+        bool hasPaid;
+        bool penaltyApplied;
+    }
+
     // Mappings
     mapping(uint256 => Group) public groups;
     mapping(uint256 => mapping(address => Member)) public members;
     mapping(uint256 => mapping(uint256 => Payment)) public payments;
     mapping(address => uint256[]) public memberGroups;
+    mapping(uint256 => mapping(address => mapping(uint256 => Contribution))) contributions;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundPaidCount;
 
     // Constructor
     constructor(address _usdcToken) Ownable(msg.sender) {
@@ -98,11 +108,15 @@ contract ArisanContract is ReentrancyGuard, Ownable {
     );
     event MemberLeft(uint256 indexed groupId, address indexed member);
 
+    event RoundAdvanced(uint256 indexed groupId, uint256 newRound);
+
     event ContributionMade(
         uint256 indexed groupId,
-        address indexed member,
+        address indexed contributor,
         uint256 amount,
-        uint256 round
+        uint256 round,
+        bool isLate,
+        bool penaltyApplied
     );
     event PaymentProcessed(
         uint256 indexed groupId,
@@ -120,7 +134,6 @@ contract ArisanContract is ReentrancyGuard, Ownable {
     event YieldEarned(uint256 indexed groupId, uint256 yieldAmount);
 
     // Modifiers
-
     modifier onlyGroupAdmin(uint256 _groupId) {
         require(groups[_groupId].admin == msg.sender, "Not group admin");
         _;
@@ -332,7 +345,75 @@ contract ArisanContract is ReentrancyGuard, Ownable {
         groups[_groupId].status = _status;
     }
 
-    // function for views
+    // Functions for Contributions and Payments
+    function makeContribution(
+        uint256 _groupId
+    )
+        external
+        nonReentrant
+        groupExists(_groupId)
+        groupActive(_groupId)
+        validContribution(_groupId)
+        withinGracePeriod(_groupId)
+    {
+        Group storage group = groups[_groupId];
+        Member storage member = members[_groupId][msg.sender];
+        uint256 currentRound = group.currentRound;
+
+        require(
+            member.memberAddress != address(0),
+            "Not a member of the group"
+        );
+        require(member.status == MemberStatus.ACTIVE, "Member is not active");
+
+        Contribution storage contribution = contributions[_groupId][msg.sender][
+            currentRound
+        ];
+        require(!contribution.hasPaid, "Already contributed this round");
+
+        bool isLate = block.timestamp > (group.paymentDeadline + 1 days);
+        bool applyPenalty = false;
+
+        if (isLate) {
+            member.missedPayments++;
+            member.totalPenalty++; // TODO: Define penalty amount
+            applyPenalty = true;
+        }
+
+        usdcToken.safeTransferFrom(
+            msg.sender,
+            address(this),
+            group.contributionAmount
+        );
+
+        contributions[_groupId][msg.sender][currentRound] = Contribution({
+            amount: group.contributionAmount,
+            paidAt: block.timestamp,
+            isLate: isLate,
+            hasPaid: true,
+            penaltyApplied: applyPenalty
+        });
+
+        member.contributionCount++;
+
+        emit ContributionMade(
+            _groupId,
+            msg.sender,
+            group.contributionAmount,
+            currentRound,
+            isLate,
+            applyPenalty
+        );
+
+        roundPaidCount[_groupId][currentRound]++;
+
+        if (roundPaidCount[_groupId][currentRound] == group.memberCount) {
+            group.currentRound++;
+            emit RoundAdvanced(_groupId, group.currentRound);
+        }
+    }
+
+    // Function for views
     function getGroup(uint256 _groupId) external view returns (Group memory) {
         return groups[_groupId];
     }
